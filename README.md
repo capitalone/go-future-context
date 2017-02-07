@@ -35,8 +35,9 @@ Timeout usage (wait for specified amount of time):
 package main
 
 import (
-  "fmt"
+	"fmt"
 	future "github.com/capitalone/go-future-context"
+	"time"
 )
 
 func ThingThatTakesALongTimeToCalculate(inVal int) (string, error) {
@@ -50,7 +51,7 @@ func main() {
     return ThingThatTakesALongTimeToCalculate(inVal)
   })
   
-  result, timeout, err := f.GetUntil(5000)
+  result, timeout, err := f.GetUntil(5 * time.Second)
   fmt.Println(result, timeout, err)
 }
 ```
