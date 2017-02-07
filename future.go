@@ -48,12 +48,14 @@ type Interface interface {
 	// When the future is cancelled, nil is returned for both the value and the error.
 	Get() (interface{}, error)
 
-	// GetUntil waits for up to ms milliseconds for the future to complete. If the
-	// future completes before ms milliseconds pass, the value and error are returned
-	// and timeout is returned as false. If ms milliseconds pass before the future
+	// GetUntil waits for up to Duration d for the future to complete. If the
+	// future completes before the Duration completes, the value and error are returned
+	// and timeout is returned as false. If the Duration completes before the future
 	// returns, nil is returned for the value and the error and timeout is returned
 	// as true.
-	GetUntil(ms int) (interface{}, bool, error)
+	//
+	// When the future is cancelled, nil is returned for both the value and the error.
+	GetUntil(d time.Duration) (interface{}, bool, error)
 
 	// Then allows multiple function calls to be chained together into a single future.
 	// Each call is run in order, with the output of the previous call passed into
@@ -68,14 +70,13 @@ type Interface interface {
 
 // New creates a new Future that wraps the provided function.
 func New(inFunc func() (interface{}, error)) Interface {
-	return newInner(nil, inFunc)
+	return newInner(make(chan struct{}), inFunc)
 }
 
-func newInner(parent Interface, inFunc func() (interface{}, error)) Interface {
+func newInner(cancelChan chan struct{}, inFunc func() (interface{}, error)) Interface {
 	f := futureImpl{
 		done:   make(chan struct{}),
-		cancel: make(chan struct{}),
-		parent: parent,
+		cancel: cancelChan,
 	}
 	go func() {
 		go func() {
@@ -84,7 +85,7 @@ func newInner(parent Interface, inFunc func() (interface{}, error)) Interface {
 		}()
 		select {
 		case <-f.done:
-		//do nothing, just waiting to see which will happen first
+			//do nothing, just waiting to see which will happen first
 		case <-f.cancel:
 			//do nothing, leave val and err nil
 		}
@@ -109,7 +110,6 @@ type futureImpl struct {
 	cancel chan struct{}
 	val    interface{}
 	err    error
-	parent Interface
 }
 
 func (f *futureImpl) Cancel() {
@@ -120,10 +120,6 @@ func (f *futureImpl) Cancel() {
 		return //already cancelled
 	default:
 		close(f.cancel) //should only be called once, since the closed cancel channel will always return
-		// cancel up the chain
-		if f.parent != nil {
-			f.parent.Cancel()
-		}
 	}
 }
 
@@ -137,9 +133,6 @@ func (f *futureImpl) IsCancelled() bool {
 }
 
 func (f *futureImpl) Get() (interface{}, error) {
-	if f.IsCancelled() {
-		return nil, nil
-	}
 	select {
 	case <-f.done:
 		return f.val, f.err
@@ -149,12 +142,12 @@ func (f *futureImpl) Get() (interface{}, error) {
 	return nil, nil
 }
 
-func (f *futureImpl) GetUntil(ms int) (interface{}, bool, error) {
+func (f *futureImpl) GetUntil(d time.Duration) (interface{}, bool, error) {
 	select {
 	case <-f.done:
 		val, err := f.Get()
 		return val, false, err
-	case <-time.After(time.Duration(ms) * time.Millisecond):
+	case <-time.After(d):
 		return nil, true, nil
 	case <-f.cancel:
 		//on cancel, just fall out
@@ -163,7 +156,7 @@ func (f *futureImpl) GetUntil(ms int) (interface{}, bool, error) {
 }
 
 func (f *futureImpl) Then(next func(interface{}) (interface{}, error)) Interface {
-	nextFuture := newInner(f, func() (interface{}, error) {
+	nextFuture := newInner(f.cancel, func() (interface{}, error) {
 		result, err := f.Get()
 		if f.IsCancelled() || err != nil {
 			return result, err
