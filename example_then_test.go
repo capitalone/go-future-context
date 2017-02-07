@@ -51,7 +51,7 @@ func Example_then() {
 	})
 
 	// times out during first step
-	result, timeout, err := f2.GetUntil(2000)
+	result, timeout, err := f2.GetUntil(2 * time.Second)
 	fmt.Println(result, timeout, err)
 
 	f3 := future.New(func() (interface{}, error) {
@@ -61,7 +61,7 @@ func Example_then() {
 	})
 
 	// times out during second step
-	result, timeout, err = f3.GetUntil(7000)
+	result, timeout, err = f3.GetUntil(7 * time.Second)
 	fmt.Println(result, timeout, err)
 
 	f4 := future.New(func() (interface{}, error) {
@@ -71,6 +71,6 @@ func Example_then() {
 	})
 
 	// completes both steps
-	result, timeout, err = f4.GetUntil(20000)
+	result, timeout, err = f4.GetUntil(20 * time.Second)
 	fmt.Println(result, timeout, err)
 }

@@ -36,14 +36,14 @@ func Example_getUntil() {
 	})
 
 	// times out
-	result, timeout, err := f.GetUntil(2000)
+	result, timeout, err := f.GetUntil(2 * time.Second)
 	fmt.Println(result, timeout, err)
 
 	// completes before 10s passes
-	result, timeout, err = f.GetUntil(10000)
+	result, timeout, err = f.GetUntil(10 * time.Second)
 	fmt.Println(result, timeout, err)
 
 	//  results are instantaneous
-	result, timeout, err = f.GetUntil(10000)
+	result, timeout, err = f.GetUntil(10 * time.Second)
 	fmt.Println(result, timeout, err)
 }
