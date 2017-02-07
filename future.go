@@ -1,49 +1,174 @@
+//Copyright 2016 Capital One Services, LLC
+//
+//Licensed under the Apache License, Version 2.0 (the "License");
+//you may not use this file except in compliance with the License.
+//You may obtain a copy of the License at
+//
+//http://www.apache.org/licenses/LICENSE-2.0
+//
+//Unless required by applicable law or agreed to in writing, software
+//distributed under the License is distributed on an "AS IS" BASIS,
+//WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//See the License for the specific language governing permissions and limitations under the License. 
+
 package future
 
 import (
-	"sync"
+	"context"
 	"time"
 )
 
+// Interface represents a future. No concrete implementation is
+// exposed; all access to a future is via this interface.
 type Interface interface {
+
+	// Cancel prevents a future that hasn't completed from returning a
+	// value. Any current or future calls to Get or GetUntil will return
+	// immediately.
+	//
+	// If the future has already completed or has already been
+	// cancelled, calling Cancel will do nothing.
+	// After a successful cancel, IsCancelled returns true.
+	//
+	// Calling Cancel on a future that has not completed does not stop the
+	// currently running function. However, any chained functions will not
+	// be run and the values returned by the current function are not accessible.
+	Cancel()
+
+	// IsCancelled indicates if a future terminated due to cancellation.
+	// If Cancel was called and the future's work was not completed, IsCancelled
+	// returns true. Otherwise, it returns false
+	IsCancelled() bool
+
+	// Get returns the values calculated by the future. It will pause until
+	// the future is cancelled or until the value is calculated.
+	// If Get is invoked multiple times, the same value will be returned each time.
+	// Subsequent calls to Get will return instantaneously.
+	//
+	// When the future is cancelled, nil is returned for both the value and the error.
 	Get() (interface{}, error)
+
+	// GetUntil waits for up to ms milliseconds for the future to complete. If the
+	// future completes before ms milliseconds pass, the value and error are returned
+	// and timeout is returned as false. If ms milliseconds pass before the future
+	// returns, nil is returned for the value and the error and timeout is returned
+	// as true.
 	GetUntil(ms int) (interface{}, bool, error)
+
+	// Then allows multiple function calls to be chained together into a single future.
+	// Each call is run in order, with the output of the previous call passed into
+	// the next function in the chain. If an error occurs at any step in the chain,
+	// processing ceases and the error is returned via Get or GetUntil.
+	//
+	// If Cancel is called before the chain completes, the currently running function
+	// will complete silently in the background and all unexecuted functions will
+	// not run.
+	Then(func(interface{}) (interface{}, error)) Interface
 }
 
+// New creates a new Future that wraps the provided function.
 func New(inFunc func() (interface{}, error)) Interface {
-	f := futureImpl{}
-	f.wg.Add(1)
+	return newInner(nil, inFunc)
+}
+
+func newInner(parent Interface, inFunc func() (interface{}, error)) Interface {
+	f := futureImpl{
+		done:   make(chan struct{}),
+		cancel: make(chan struct{}),
+		parent: parent,
+	}
 	go func() {
-		defer f.wg.Done()
-		f.val, f.err = inFunc()
+		go func() {
+			f.val, f.err = inFunc()
+			close(f.done)
+		}()
+		select {
+		case <-f.done:
+		//do nothing, just waiting to see which will happen first
+		case <-f.cancel:
+			//do nothing, leave val and err nil
+		}
 	}()
 	return &f
 }
 
+// NewWithContext creates a new Future that wraps the provided function and
+// cancels when the Done channel of the provided context is closed.
+func NewWithContext(ctx context.Context, inFunc func() (interface{}, error)) Interface {
+	f := New(inFunc)
+
+	go func() {
+		<-ctx.Done()
+		f.Cancel()
+	}()
+	return f
+}
+
 type futureImpl struct {
-	wg  sync.WaitGroup
-	val interface{}
-	err error
+	done   chan struct{}
+	cancel chan struct{}
+	val    interface{}
+	err    error
+	parent Interface
+}
+
+func (f *futureImpl) Cancel() {
+	select {
+	case <-f.done:
+		return //already finished
+	case <-f.cancel:
+		return //already cancelled
+	default:
+		close(f.cancel) //should only be called once, since the closed cancel channel will always return
+		// cancel up the chain
+		if f.parent != nil {
+			f.parent.Cancel()
+		}
+	}
+}
+
+func (f *futureImpl) IsCancelled() bool {
+	select {
+	case <-f.cancel:
+		return true
+	default:
+		return false
+	}
 }
 
 func (f *futureImpl) Get() (interface{}, error) {
-	f.wg.Wait()
-	return f.val, f.err
+	if f.IsCancelled() {
+		return nil, nil
+	}
+	select {
+	case <-f.done:
+		return f.val, f.err
+	case <-f.cancel:
+		//on cancel, just fall out
+	}
+	return nil, nil
 }
 
 func (f *futureImpl) GetUntil(ms int) (interface{}, bool, error) {
-	c := make(chan struct{})
-	go func() {
-		f.Get()
-		close(c)
-	}()
 	select {
-	case <-c:
-		return f.val, false, f.err
+	case <-f.done:
+		val, err := f.Get()
+		return val, false, err
 	case <-time.After(time.Duration(ms) * time.Millisecond):
 		return nil, true, nil
+	case <-f.cancel:
+		//on cancel, just fall out
 	}
-	//should never get here
 	return nil, false, nil
 }
 
+func (f *futureImpl) Then(next func(interface{}) (interface{}, error)) Interface {
+	nextFuture := newInner(f, func() (interface{}, error) {
+		result, err := f.Get()
+		if f.IsCancelled() || err != nil {
+			return result, err
+		}
+		return next(result)
+	})
+	return nextFuture
+}
