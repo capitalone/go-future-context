@@ -13,7 +13,6 @@
 // SPDX-Copyright: Copyright (c) Capital One Services, LLC
 // SPDX-License-Identifier: Apache-2.0
 
-
 package future_test
 
 import (

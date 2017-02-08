@@ -13,7 +13,6 @@
 // SPDX-Copyright: Copyright (c) Capital One Services, LLC
 // SPDX-License-Identifier: Apache-2.0
 
-
 package future
 
 import (
@@ -98,7 +97,7 @@ func newInner(cancelChan chan struct{}, inFunc func() (interface{}, error)) Inte
 
 // NewWithContext creates a new Future that wraps the provided function and
 // cancels when the Done channel of the provided context is closed.
-func NewWithContext(ctx context.Context, inFunc func() (interface{}, error) ) Interface {
+func NewWithContext(ctx context.Context, inFunc func() (interface{}, error)) Interface {
 	f := New(inFunc).(*futureImpl)
 	c := ctx.Done()
 	if c != nil {
@@ -110,7 +109,7 @@ func NewWithContext(ctx context.Context, inFunc func() (interface{}, error) ) In
 			case <-f.cancel:
 			//do nothing, cancelled future doesn't cancel context
 			case <-f.done:
-			//do nothing, done future doesn't cancel context
+				//do nothing, done future doesn't cancel context
 			}
 		}()
 	}
