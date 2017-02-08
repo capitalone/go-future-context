@@ -193,7 +193,7 @@ func main() {
 ```
 
 When a future is created using `NewWithContext`, it is cancelled when the Context's `Done` channel is closed, 
-whether is is closed due to timeout or an explicit call to the `CancelFunc` returned by the Context factory functions.
+whether it is closed due to timeout or an explicit call to the `CancelFunc` returned by the Context factory functions.
 
 Contributors:
 
