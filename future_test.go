@@ -48,7 +48,7 @@ func TestFutureGetUntil(t *testing.T) {
 	}
 	f := New(fb)
 	start := time.Now()
-	v, timeout, err := f.GetUntil(3 *time.Second)
+	v, timeout, err := f.GetUntil(3 * time.Second)
 	end := time.Now()
 	dur := end.Unix() - start.Unix()
 	fmt.Println(v, timeout, err, dur)
