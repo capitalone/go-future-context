@@ -138,7 +138,7 @@ func main() {
 
 - Calling `Cancel` after a `Get` or `GetUntil` has completed has no effect.
 - Calling `Cancel` multiple times has no effect.
-- When a future is cancelled, the process continues in the background but any data returned will is not accessible.
+- When a future is cancelled, the process continues in the background but any data returned is not accessible.
 - If `GetUntil` returns due to a timeout, it does not cancel the future. If you wish to cancel based on a `GetUntil` 
 timeout, do the following: 
 ```go
@@ -193,7 +193,7 @@ func main() {
 ```
 
 When a future is created using `NewWithContext`, it is cancelled when the Context's `Done` channel is closed, 
-whether is is closed due to timeout or an explicit call to the `CancelFunc` returned by the Context factory functions.
+whether it is closed due to timeout or an explicit call to the `CancelFunc` returned by the Context factory functions.
 
 Contributors:
 
