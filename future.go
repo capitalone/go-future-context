@@ -17,8 +17,8 @@ package future
 
 import (
 	"context"
-	"time"
 	"sync"
+	"time"
 )
 
 // Interface represents a future. No concrete implementation is
@@ -92,7 +92,7 @@ func newInner(cancelOnce *cancelOnce, inFunc func() (interface{}, error)) Interf
 		case <-f.done:
 		//do nothing, just waiting to see which will happen first
 		case <-f.cancel.ch:
-		//do nothing, leave val and err nil
+			//do nothing, leave val and err nil
 		}
 	}()
 	return &f
@@ -112,7 +112,7 @@ func NewWithContext(ctx context.Context, inFunc func() (interface{}, error)) Int
 			case <-f.cancel.ch:
 			//do nothing, cancelled future doesn't cancel context
 			case <-f.done:
-			//do nothing, done future doesn't cancel context
+				//do nothing, done future doesn't cancel context
 			}
 		}()
 	}
@@ -158,7 +158,7 @@ func (f *futureImpl) Get() (interface{}, error) {
 	case <-f.done:
 		return f.val, f.err
 	case <-f.cancel.ch:
-	//on cancel, just fall out
+		//on cancel, just fall out
 	}
 	return nil, nil
 }
@@ -171,7 +171,7 @@ func (f *futureImpl) GetUntil(d time.Duration) (interface{}, bool, error) {
 	case <-time.After(d):
 		return nil, true, nil
 	case <-f.cancel.ch:
-	//on cancel, just fall out
+		//on cancel, just fall out
 	}
 	return nil, false, nil
 }

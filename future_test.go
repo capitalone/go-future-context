@@ -20,10 +20,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
-	"sync"
 )
 
 func TestFutureGet(t *testing.T) {
@@ -254,7 +254,7 @@ func TestNewWithContextCancel(t *testing.T) {
 // it marked as skipped.
 func TestCancelConcurrent(t *testing.T) {
 	t.SkipNow()
-	loop := func(){
+	loop := func() {
 		const N = 2000
 		start := make(chan int)
 		var done sync.WaitGroup
