@@ -18,12 +18,12 @@ package future
 import (
 	"context"
 	"time"
+	"sync"
 )
 
 // Interface represents a future. No concrete implementation is
 // exposed; all access to a future is via this interface.
 type Interface interface {
-
 	// Cancel prevents a future that hasn't completed from returning a
 	// value. Any current or future calls to Get or GetUntil will return
 	// immediately.
@@ -72,13 +72,16 @@ type Interface interface {
 
 // New creates a new Future that wraps the provided function.
 func New(inFunc func() (interface{}, error)) Interface {
-	return newInner(make(chan struct{}), inFunc)
+	return newInner(&cancelOnce{
+		ch:   make(chan struct{}),
+		once: sync.Once{}},
+		inFunc)
 }
 
-func newInner(cancelChan chan struct{}, inFunc func() (interface{}, error)) Interface {
+func newInner(cancelOnce *cancelOnce, inFunc func() (interface{}, error)) Interface {
 	f := futureImpl{
 		done:   make(chan struct{}),
-		cancel: cancelChan,
+		cancel: cancelOnce,
 	}
 	go func() {
 		go func() {
@@ -87,9 +90,9 @@ func newInner(cancelChan chan struct{}, inFunc func() (interface{}, error)) Inte
 		}()
 		select {
 		case <-f.done:
-			//do nothing, just waiting to see which will happen first
-		case <-f.cancel:
-			//do nothing, leave val and err nil
+		//do nothing, just waiting to see which will happen first
+		case <-f.cancel.ch:
+		//do nothing, leave val and err nil
 		}
 	}()
 	return &f
@@ -106,19 +109,24 @@ func NewWithContext(ctx context.Context, inFunc func() (interface{}, error)) Int
 			case <-c:
 				//if context is cancelled, cancel future
 				f.Cancel()
-			case <-f.cancel:
+			case <-f.cancel.ch:
 			//do nothing, cancelled future doesn't cancel context
 			case <-f.done:
-				//do nothing, done future doesn't cancel context
+			//do nothing, done future doesn't cancel context
 			}
 		}()
 	}
 	return f
 }
 
+type cancelOnce struct {
+	ch   chan struct{}
+	once sync.Once
+}
+
 type futureImpl struct {
 	done   chan struct{}
-	cancel chan struct{}
+	cancel *cancelOnce
 	val    interface{}
 	err    error
 }
@@ -127,16 +135,18 @@ func (f *futureImpl) Cancel() {
 	select {
 	case <-f.done:
 		return //already finished
-	case <-f.cancel:
+	case <-f.cancel.ch:
 		return //already cancelled
 	default:
-		close(f.cancel) //should only be called once, since the closed cancel channel will always return
+		f.cancel.once.Do(func() {
+			close(f.cancel.ch) //should only be called once, since the closed cancel channel will always return
+		})
 	}
 }
 
 func (f *futureImpl) IsCancelled() bool {
 	select {
-	case <-f.cancel:
+	case <-f.cancel.ch:
 		return true
 	default:
 		return false
@@ -147,8 +157,8 @@ func (f *futureImpl) Get() (interface{}, error) {
 	select {
 	case <-f.done:
 		return f.val, f.err
-	case <-f.cancel:
-		//on cancel, just fall out
+	case <-f.cancel.ch:
+	//on cancel, just fall out
 	}
 	return nil, nil
 }
@@ -160,8 +170,8 @@ func (f *futureImpl) GetUntil(d time.Duration) (interface{}, bool, error) {
 		return val, false, err
 	case <-time.After(d):
 		return nil, true, nil
-	case <-f.cancel:
-		//on cancel, just fall out
+	case <-f.cancel.ch:
+	//on cancel, just fall out
 	}
 	return nil, false, nil
 }
