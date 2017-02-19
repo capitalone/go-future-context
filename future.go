@@ -71,8 +71,7 @@ type Interface interface {
 
 // New creates a new Future that wraps the provided function.
 func New(inFunc func() (interface{}, error)) Interface {
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	return newInner(ctx.Done(), cancelFunc, inFunc)
+	return NewWithContext(context.Background(), inFunc)
 }
 
 func newInner(cancelChan <-chan struct{}, cancelFunc context.CancelFunc, inFunc func() (interface{}, error)) Interface {
