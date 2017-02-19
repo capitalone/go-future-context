@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -246,4 +247,31 @@ func TestNewWithContextCancel(t *testing.T) {
 	assert.Nil(t, err)
 	assert.True(t, f.IsCancelled())
 	assert.Equal(t, context.Canceled, ctx.Err())
+}
+
+// test case from Dave Cheney's bug report
+// since this test runs forever, I have
+// it marked as skipped.
+func TestCancelConcurrent(t *testing.T) {
+	t.SkipNow()
+	loop := func() {
+		const N = 2000
+		start := make(chan int)
+		var done sync.WaitGroup
+		done.Add(N)
+		f := New(func() (interface{}, error) { select {}; return 1, nil })
+		for i := 0; i < N; i++ {
+			go func() {
+				defer done.Done()
+				<-start
+				f.Cancel()
+			}()
+		}
+		close(start)
+		done.Wait()
+	}
+	for {
+		loop()
+	}
+
 }
