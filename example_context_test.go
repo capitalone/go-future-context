@@ -18,8 +18,9 @@ package future_test
 import (
 	"context"
 	"fmt"
-	future "github.com/capitalone/go-future-context"
 	"time"
+
+	future "github.com/capitalone/go-future-context"
 )
 
 func Example_context() {
@@ -31,7 +32,7 @@ func Example_context() {
 		return inVal * 2, nil
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Second)
 
 	f := future.NewWithContext(ctx, func() (interface{}, error) {
 		return ThingThatTakesALongTimeToCalculate(inVal)
@@ -39,4 +40,5 @@ func Example_context() {
 
 	result, err := f.Get()
 	fmt.Println(result, err, f.IsCancelled())
+	cancelFunc()
 }
