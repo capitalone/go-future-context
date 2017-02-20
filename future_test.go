@@ -13,17 +13,20 @@
 // SPDX-Copyright: Copyright (c) Capital One Services, LLC
 // SPDX-License-Identifier: Apache-2.0
 
-package future
+package future_test
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jonbodner/go-future-context"
+	"github.com/jonbodner/ranger"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFutureGet(t *testing.T) {
@@ -31,7 +34,7 @@ func TestFutureGet(t *testing.T) {
 		time.Sleep(5 * time.Second)
 		return 10, nil
 	}
-	f := New(fb)
+	f := future.New(fb)
 	start := time.Now()
 	v, err := f.Get()
 	end := time.Now()
@@ -47,7 +50,7 @@ func TestFutureGetUntil(t *testing.T) {
 		time.Sleep(5 * time.Second)
 		return 10, nil
 	}
-	f := New(fb)
+	f := future.New(fb)
 	start := time.Now()
 	v, timeout, err := f.GetUntil(3 * time.Second)
 	end := time.Now()
@@ -70,7 +73,7 @@ func TestFutureGetUntil(t *testing.T) {
 }
 
 func TestThen(t *testing.T) {
-	f := New(func() (interface{}, error) {
+	f := future.New(func() (interface{}, error) {
 		return 10, nil
 	}).Then(func(i interface{}) (interface{}, error) {
 		return 2 * i.(int), nil
@@ -82,7 +85,7 @@ func TestThen(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 22, result)
 
-	g := New(func() (interface{}, error) {
+	g := future.New(func() (interface{}, error) {
 		return nil, errors.New("This is an error")
 	}).Then(func(i interface{}) (interface{}, error) {
 		return 2 * i.(int), nil
@@ -93,7 +96,7 @@ func TestThen(t *testing.T) {
 	assert.Nil(t, result)
 	assert.Equal(t, "This is an error", err.Error())
 
-	h := New(func() (interface{}, error) {
+	h := future.New(func() (interface{}, error) {
 		return 10, nil
 	}).Then(func(i interface{}) (interface{}, error) {
 		return nil, errors.New("This is also an error")
@@ -106,7 +109,7 @@ func TestThen(t *testing.T) {
 }
 
 func TestCancel(t *testing.T) {
-	f := New(func() (interface{}, error) {
+	f := future.New(func() (interface{}, error) {
 		time.Sleep(5 * time.Second)
 		return 10, nil
 	})
@@ -124,7 +127,7 @@ func TestCancel(t *testing.T) {
 func TestCancelChain(t *testing.T) {
 	var run1 int64
 	var run2 int64
-	f := New(func() (interface{}, error) {
+	f := future.New(func() (interface{}, error) {
 		fmt.Println("1")
 		time.Sleep(5 * time.Second)
 		atomic.AddInt64(&run1, 1)
@@ -152,7 +155,7 @@ func TestCancelChain(t *testing.T) {
 }
 
 func TestCancelTimer(t *testing.T) {
-	f := New(func() (interface{}, error) {
+	f := future.New(func() (interface{}, error) {
 		time.Sleep(10 * time.Second)
 		return 10, nil
 	})
@@ -176,7 +179,7 @@ func TestCancelTimer(t *testing.T) {
 }
 
 func TestCancelAfterDone(t *testing.T) {
-	f := New(func() (interface{}, error) {
+	f := future.New(func() (interface{}, error) {
 		time.Sleep(5 * time.Second)
 		return 10, nil
 	})
@@ -194,7 +197,7 @@ func TestCancelAfterDone(t *testing.T) {
 }
 
 func TestCancelTwice(t *testing.T) {
-	f := New(func() (interface{}, error) {
+	f := future.New(func() (interface{}, error) {
 		time.Sleep(5 * time.Second)
 		return 10, nil
 	})
@@ -216,9 +219,9 @@ func TestCancelTwice(t *testing.T) {
 }
 
 func TestNewWithContextTimeout(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Second)
 
-	f := NewWithContext(ctx, func() (interface{}, error) {
+	f := future.NewWithContext(ctx, func() (interface{}, error) {
 		time.Sleep(5 * time.Second)
 		return 10, nil
 	})
@@ -228,12 +231,14 @@ func TestNewWithContextTimeout(t *testing.T) {
 	assert.Nil(t, err)
 	assert.True(t, f.IsCancelled())
 	assert.Equal(t, context.DeadlineExceeded, ctx.Err())
+	//invoked to make go vet happy
+	cancelFunc()
 }
 
 func TestNewWithContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	f := NewWithContext(ctx, func() (interface{}, error) {
+	f := future.NewWithContext(ctx, func() (interface{}, error) {
 		time.Sleep(5 * time.Second)
 		return 10, nil
 	})
@@ -249,18 +254,55 @@ func TestNewWithContextCancel(t *testing.T) {
 	assert.Equal(t, context.Canceled, ctx.Err())
 }
 
+func TestNewWithContextCancelInnerOnly(t *testing.T) {
+	ctx := context.Background()
+
+	f := future.NewWithContext(ctx, func() (interface{}, error) {
+		time.Sleep(5 * time.Second)
+		return 10, nil
+	})
+	go func() {
+		time.Sleep(2 * time.Second)
+		f.Cancel()
+	}()
+	result, err := f.Get()
+	fmt.Println(result, err, f.IsCancelled())
+	assert.Nil(t, result)
+	assert.Nil(t, err)
+	assert.True(t, f.IsCancelled())
+	assert.Nil(t, ctx.Err())
+}
+
+func TestNewWithContextCancelInnerOnlyCancellable(t *testing.T) {
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
+	f := future.NewWithContext(ctx, func() (interface{}, error) {
+		time.Sleep(5 * time.Second)
+		return 10, nil
+	})
+	go func() {
+		time.Sleep(2 * time.Second)
+		f.Cancel()
+	}()
+	result, err := f.Get()
+	fmt.Println(result, err, f.IsCancelled())
+	assert.Nil(t, result)
+	assert.Nil(t, err)
+	assert.True(t, f.IsCancelled())
+	assert.Nil(t, ctx.Err())
+	cancelFunc()
+	assert.Equal(t, context.Canceled, ctx.Err())
+}
+
 // test case from Dave Cheney's bug report
-// since this test runs forever, I have
-// it marked as skipped.
 func TestCancelConcurrent(t *testing.T) {
-	t.SkipNow()
 	loop := func() {
-		const N = 2000
+		const N = 8000
 		start := make(chan int)
 		var done sync.WaitGroup
 		done.Add(N)
-		f := New(func() (interface{}, error) { select {}; return 1, nil })
-		for i := 0; i < N; i++ {
+		f := future.New(func() (interface{}, error) { select {}; return 1, nil })
+		for range ranger.UpTo(N) {
 			go func() {
 				defer done.Done()
 				<-start
@@ -270,8 +312,7 @@ func TestCancelConcurrent(t *testing.T) {
 		close(start)
 		done.Wait()
 	}
-	for {
+	for range ranger.UpTo(500) {
 		loop()
 	}
-
 }
