@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jonbodner/go-future-context"
+	"github.com/capitalone/go-future-context"
 	"github.com/jonbodner/ranger"
 	"github.com/stretchr/testify/assert"
 )
