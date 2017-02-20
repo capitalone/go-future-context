@@ -273,6 +273,27 @@ func TestNewWithContextCancelInnerOnly(t *testing.T) {
 	assert.Nil(t, ctx.Err())
 }
 
+func TestNewWithContextCancelInnerOnlyCancellable(t *testing.T) {
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
+	f := future.NewWithContext(ctx, func() (interface{}, error) {
+		time.Sleep(5 * time.Second)
+		return 10, nil
+	})
+	go func() {
+		time.Sleep(2 * time.Second)
+		f.Cancel()
+	}()
+	result, err := f.Get()
+	fmt.Println(result, err, f.IsCancelled())
+	assert.Nil(t, result)
+	assert.Nil(t, err)
+	assert.True(t, f.IsCancelled())
+	assert.Nil(t, ctx.Err())
+	cancelFunc()
+	assert.Equal(t, context.Canceled, ctx.Err())
+}
+
 // test case from Dave Cheney's bug report
 func TestCancelConcurrent(t *testing.T) {
 	loop := func() {
