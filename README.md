@@ -1,3 +1,5 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/capitalone/go-future-context)](https://goreportcard.com/report/github.com/capitalone/go-future-context)
+
 # future
 
 A simple Future (Promise) library for Go.
