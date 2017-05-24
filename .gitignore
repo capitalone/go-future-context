@@ -25,4 +25,5 @@ _testmain.go
 .idea
 *.iml
 .DS_Store
+.vscode
 

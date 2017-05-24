@@ -41,4 +41,6 @@ func Example_context() {
 	result, err := f.Get()
 	fmt.Println(result, err, f.IsCancelled())
 	cancelFunc()
+
+	// Output: <nil> <nil> true
 }

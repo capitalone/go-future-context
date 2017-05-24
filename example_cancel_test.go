@@ -41,4 +41,6 @@ func Example_cancel() {
 
 	result, err := f.Get()
 	fmt.Println(result, err, f.IsCancelled())
+
+	// Output: <nil> <nil> true
 }

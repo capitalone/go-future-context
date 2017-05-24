@@ -17,8 +17,9 @@ package future_test
 
 import (
 	"fmt"
-	future "github.com/capitalone/go-future-context"
 	"time"
+
+	future "github.com/capitalone/go-future-context"
 )
 
 func Example_getUntil() {
@@ -45,4 +46,10 @@ func Example_getUntil() {
 	//  results are instantaneous
 	result, timeout, err = f.GetUntil(10 * time.Second)
 	fmt.Println(result, timeout, err)
+
+	// Output:
+	// <nil> true <nil>
+	// 400 false <nil>
+	// 400 false <nil>
+
 }

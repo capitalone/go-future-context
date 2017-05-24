@@ -72,4 +72,11 @@ func Example_then() {
 	// completes both steps
 	result, timeout, err = f4.GetUntil(20 * time.Second)
 	fmt.Println(result, timeout, err)
+
+	// Output:
+	// 800 <nil>
+	// 800 <nil>
+	// <nil> true <nil>
+	// <nil> true <nil>
+	// 800 false <nil>
 }

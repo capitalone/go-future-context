@@ -40,4 +40,8 @@ func Example_get() {
 	// second call, results are instantaneous
 	result, err = f.Get()
 	fmt.Println(result, err)
+
+	// Output:
+	// 400 <nil>
+	// 400 <nil>
 }
